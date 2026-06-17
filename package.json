@@ -1,0 +1,25 @@
+{
+  "name": "sales-map-pwa",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
+    "icons": "node scripts/generate-icons.mjs",
+    "postinstall": "node scripts/generate-icons.mjs"
+  },
+  "dependencies": {
+    "firebase": "^10.13.0",
+    "leaflet": "^1.9.4",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "react-leaflet": "^4.2.1"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-react": "^4.0.4",
+    "vite": "^4.5.3",
+    "vite-plugin-pwa": "^0.16.4"
+  }
+}
