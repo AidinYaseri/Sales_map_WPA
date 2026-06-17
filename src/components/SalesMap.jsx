@@ -32,9 +32,10 @@ function ClickCapture({ onMapClick }) {
 }
 
 export default function SalesMap() {
-  const [pins, setPins]   = useState([])
-  const [modal, setModal] = useState(null)
-  const [map, setMap]     = useState(null)
+  const [pins, setPins]     = useState([])
+  const [modal, setModal]   = useState(null)
+  const [map, setMap]       = useState(null)
+  const [syncErr, setSyncErr] = useState(null)
 
   // Fly to user's location when map is ready
   useEffect(() => {
@@ -46,9 +47,14 @@ export default function SalesMap() {
 
   // Real-time Firestore sync
   useEffect(() => {
-    const unsub = onSnapshot(collection(db, 'pins'), snap => {
-      setPins(snap.docs.map(d => ({ id: d.id, ...d.data() })))
-    })
+    const unsub = onSnapshot(
+      collection(db, 'pins'),
+      snap => {
+        setSyncErr(null)
+        setPins(snap.docs.map(d => ({ id: d.id, ...d.data() })))
+      },
+      err => setSyncErr(err.message),
+    )
     return unsub
   }, [])
 
@@ -59,22 +65,30 @@ export default function SalesMap() {
   }
 
   async function savePin(data) {
-    if (modal.mode === 'add') {
-      await addDoc(collection(db, 'pins'), {
-        lat: modal.latlng.lat,
-        lng: modal.latlng.lng,
-        ...data,
-        createdAt: serverTimestamp(),
-      })
-    } else {
-      await updateDoc(doc(db, 'pins', modal.pin.id), data)
+    try {
+      if (modal.mode === 'add') {
+        await addDoc(collection(db, 'pins'), {
+          lat: modal.latlng.lat,
+          lng: modal.latlng.lng,
+          ...data,
+          createdAt: serverTimestamp(),
+        })
+      } else {
+        await updateDoc(doc(db, 'pins', modal.pin.id), data)
+      }
+      setModal(null)
+    } catch (err) {
+      setSyncErr(err.message)
     }
-    setModal(null)
   }
 
   async function deletePin() {
-    await deleteDoc(doc(db, 'pins', modal.pin.id))
-    setModal(null)
+    try {
+      await deleteDoc(doc(db, 'pins', modal.pin.id))
+      setModal(null)
+    } catch (err) {
+      setSyncErr(err.message)
+    }
   }
 
   return (
@@ -102,6 +116,18 @@ export default function SalesMap() {
       </MapContainer>
 
       <Legend />
+
+      {syncErr && (
+        <div style={{
+          position: 'fixed', top: 12, left: '50%', transform: 'translateX(-50%)',
+          zIndex: 900, background: '#e53935', color: '#fff',
+          padding: '10px 16px', borderRadius: 10, fontSize: 13,
+          maxWidth: '90vw', textAlign: 'center',
+          boxShadow: '0 2px 8px rgba(0,0,0,.3)',
+        }}>
+          Firebase error: {syncErr}
+        </div>
+      )}
 
       <button
         onClick={locateMe}

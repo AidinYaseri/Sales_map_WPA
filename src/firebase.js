@@ -1,5 +1,5 @@
 import { initializeApp } from 'firebase/app'
-import { initializeFirestore, persistentLocalCache } from 'firebase/firestore'
+import { getFirestore } from 'firebase/firestore'
 
 const app = initializeApp({
   apiKey:            'AIzaSyAhdX-_aKqXwdHHAiWqzwYcuN09oKkESg4',
@@ -10,7 +10,4 @@ const app = initializeApp({
   appId:             '1:620050893865:web:aa11d5d054c9c6e8b6a038',
 })
 
-// Persistent local cache enables offline support
-export const db = initializeFirestore(app, {
-  localCache: persistentLocalCache(),
-})
+export const db = getFirestore(app)
