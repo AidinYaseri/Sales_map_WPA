@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect, useRef } from 'react'
 
 const STATUSES = [
   { value: 'not_interested', label: 'Not Interested', bg: '#e53935', fg: '#fff' },
@@ -12,10 +12,20 @@ const inputStyle = {
   fontFamily: 'inherit', outline: 'none',
 }
 
-export default function PinModal({ mode, pin, onSave, onDelete, onClose }) {
+export default function PinModal({ mode, pin, address, onSave, onDelete, onClose }) {
   const [name,   setName]   = useState(pin?.name   ?? '')
   const [status, setStatus] = useState(pin?.status ?? 'not_interested')
   const [notes,  setNotes]  = useState(pin?.notes  ?? '')
+  const userTyped = useRef(false)
+
+  // Auto-fill address when reverse geocoding resolves (add mode only)
+  useEffect(() => {
+    if (!pin && address !== undefined && !userTyped.current) {
+      setName(address)
+    }
+  }, [address, pin])
+
+  const addressLoading = !pin && address === undefined
 
   return (
     <div
@@ -38,7 +48,6 @@ export default function PinModal({ mode, pin, onSave, onDelete, onClose }) {
           boxShadow: '0 -4px 24px rgba(0,0,0,.15)',
         }}
       >
-        {/* Drag handle */}
         <div style={{ width: 40, height: 4, background: '#e0e0e0', borderRadius: 2, margin: '0 auto 18px' }} />
 
         <h2 style={{ margin: '0 0 18px', fontSize: 18, fontWeight: 700 }}>
@@ -46,14 +55,17 @@ export default function PinModal({ mode, pin, onSave, onDelete, onClose }) {
         </h2>
 
         <label style={{ display: 'block', marginBottom: 6, fontWeight: 500, fontSize: 13, color: '#666' }}>
-          Name / Address
+          Address
         </label>
         <input
           value={name}
-          onChange={e => setName(e.target.value)}
-          placeholder="e.g. 123 Main St"
-          style={inputStyle}
-          autoFocus
+          onChange={e => { userTyped.current = true; setName(e.target.value) }}
+          placeholder={addressLoading ? 'Fetching address...' : 'e.g. 123 Main St'}
+          style={{
+            ...inputStyle,
+            color: addressLoading ? '#aaa' : undefined,
+          }}
+          autoFocus={!addressLoading}
         />
 
         <label style={{ display: 'block', marginBottom: 8, fontWeight: 500, fontSize: 13, color: '#666' }}>

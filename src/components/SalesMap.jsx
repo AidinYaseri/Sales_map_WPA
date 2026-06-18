@@ -8,6 +8,7 @@ import {
 import { db } from '../firebase'
 import PinModal from './PinModal'
 import Legend from './Legend'
+import ExportPanel from './ExportPanel'
 import 'leaflet/dist/leaflet.css'
 
 const COLORS = {
@@ -31,13 +32,38 @@ function ClickCapture({ onMapClick }) {
   return null
 }
 
-export default function SalesMap() {
-  const [pins, setPins]     = useState([])
-  const [modal, setModal]   = useState(null)
-  const [map, setMap]       = useState(null)
-  const [syncErr, setSyncErr] = useState(null)
+async function reverseGeocode(lat, lng) {
+  try {
+    const res = await fetch(
+      `https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}`,
+      { headers: { 'User-Agent': 'SalesMapPWA/1.0' } }
+    )
+    const data = await res.json()
+    const a = data.address || {}
+    const parts = [a.house_number, a.road].filter(Boolean)
+    return parts.join(' ') || data.display_name?.split(',')[0] || ''
+  } catch {
+    return ''
+  }
+}
 
-  // Fly to user's location when map is ready
+async function syncToSheets(pins) {
+  const url = localStorage.getItem('sheetsWebhookUrl')
+  if (!url) return
+  try {
+    await fetch(url, { method: 'POST', mode: 'no-cors', body: JSON.stringify(pins) })
+  } catch (err) {
+    console.warn('Sheets sync failed:', err)
+  }
+}
+
+export default function SalesMap() {
+  const [pins, setPins]             = useState([])
+  const [modal, setModal]           = useState(null)
+  const [map, setMap]               = useState(null)
+  const [syncErr, setSyncErr]       = useState(null)
+  const [showExport, setShowExport] = useState(false)
+
   useEffect(() => {
     if (!map) return
     navigator.geolocation?.getCurrentPosition(p => {
@@ -45,13 +71,17 @@ export default function SalesMap() {
     })
   }, [map])
 
-  // Real-time Firestore sync
   useEffect(() => {
     const unsub = onSnapshot(
       collection(db, 'pins'),
       snap => {
         setSyncErr(null)
-        setPins(snap.docs.map(d => ({ id: d.id, ...d.data() })))
+        const newPins = snap.docs.map(d => ({ id: d.id, ...d.data() }))
+        setPins(newPins)
+        // Auto-sync to Google Sheets on every confirmed server update
+        if (!snap.metadata.fromCache && !snap.metadata.hasPendingWrites) {
+          syncToSheets(newPins)
+        }
       },
       err => setSyncErr(err.message),
     )
@@ -62,6 +92,13 @@ export default function SalesMap() {
     navigator.geolocation?.getCurrentPosition(p => {
       map?.flyTo([p.coords.latitude, p.coords.longitude], 17)
     })
+  }
+
+  async function handleMapClick(latlng) {
+    // Open modal immediately, then fill address in the background
+    setModal({ mode: 'add', latlng, address: undefined })
+    const address = await reverseGeocode(latlng.lat, latlng.lng)
+    setModal(prev => prev?.mode === 'add' ? { ...prev, address } : prev)
   }
 
   async function savePin(data) {
@@ -104,7 +141,7 @@ export default function SalesMap() {
           url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
           attribution='© <a href="https://openstreetmap.org/copyright">OpenStreetMap</a>'
         />
-        <ClickCapture onMapClick={latlng => setModal({ mode: 'add', latlng })} />
+        <ClickCapture onMapClick={handleMapClick} />
         {pins.map(pin => (
           <Marker
             key={pin.id}
@@ -129,6 +166,7 @@ export default function SalesMap() {
         </div>
       )}
 
+      {/* Locate me */}
       <button
         onClick={locateMe}
         title="Go to my location"
@@ -144,13 +182,38 @@ export default function SalesMap() {
         ⊕
       </button>
 
+      {/* Export / Google Sheets */}
+      <button
+        onClick={() => setShowExport(true)}
+        title="Export / Google Sheets"
+        aria-label="Export"
+        style={{
+          position: 'fixed', bottom: 174, right: 16, zIndex: 800,
+          width: 44, height: 44, borderRadius: '50%', border: 'none',
+          background: '#1a73e8', color: '#fff',
+          boxShadow: '0 2px 8px rgba(0,0,0,.25)',
+          cursor: 'pointer', fontSize: 16, fontWeight: 700,
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+        }}
+      >
+        XLS
+      </button>
+
       {modal && (
         <PinModal
           mode={modal.mode}
           pin={modal.pin}
+          address={modal.address}
           onSave={savePin}
           onDelete={modal.mode === 'edit' ? deletePin : undefined}
           onClose={() => setModal(null)}
+        />
+      )}
+
+      {showExport && (
+        <ExportPanel
+          pins={pins}
+          onClose={() => setShowExport(false)}
         />
       )}
     </>
